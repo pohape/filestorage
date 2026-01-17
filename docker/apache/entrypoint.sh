@@ -20,6 +20,13 @@ esac
 CONF="/usr/local/apache2/conf/extra/storage.conf"
 HTPASSWD="/usr/local/apache2/conf/.htpasswd"
 
+# 1) Запускаем воркеры Apache под владельцем смонтированного /var/www
+RUN_UID="$(stat -c %u /var/www)"
+RUN_GID="$(stat -c %g /var/www)"
+cat > "$RUNCONF" <<EOF
+User #${RUN_UID}
+Group #${RUN_GID}
+EOF
 htpasswd -bcB "$HTPASSWD" "$ADMIN_AUTH_USER" "$ADMIN_AUTH_PASS"
 
 cat > "$CONF" <<EOF
@@ -41,7 +48,6 @@ cat > "$CONF" <<EOF
     </Directory>
 </VirtualHost>
 
-# USER DOMAINS — subdomain -> folder
 <VirtualHost *:80>
     ServerName storage.local
     ServerAlias *.${BASE_DOMAIN}
@@ -49,7 +55,7 @@ cat > "$CONF" <<EOF
     UseCanonicalName Off
     VirtualDocumentRoot "/var/www/%1"
 
-    <Directory "/var/www/*">
+    <Directory "/var/www">
         Options $INDEX_OPT
         AllowOverride None
         Require all granted
