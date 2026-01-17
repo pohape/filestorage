@@ -1,0 +1,21 @@
+{
+    email example@example.com
+}
+
+# /home/user/data/vladivostok
+vladivostok.example.com {
+    reverse_proxy 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# /home/user/data/vse
+vse.example.com {
+    reverse_proxy 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

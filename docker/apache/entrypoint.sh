@@ -1,27 +1,24 @@
 #!/bin/sh
 set -eu
 
-: "${BASE_DOMAINS:?BASE_DOMAINS is required (comma-separated)}"
+: "${BASE_DOMAIN:?BASE_DOMAIN is required}"
 
+BASE_DOMAIN="$(printf '%s' "$BASE_DOMAIN" | tr -d '[:space:]' | sed 's/\.$//')"
 CONF="/usr/local/apache2/conf/extra/storage.conf"
-
-# ServerAlias lines for each base domain
-ALIASES=""
-OLD_IFS="$IFS"
-IFS=","
-for d in $BASE_DOMAINS; do
-  d="$(echo "$d" | tr -d '[:space:]' | sed 's/\.$//')"
-  [ -n "$d" ] || continue
-  ALIASES="${ALIASES}    ServerAlias *.${d}\n"
-done
-IFS="$OLD_IFS"
+BASE_RE="$(printf '%s' "$BASE_DOMAIN" | sed -e 's/[.[\^$*+?(){|}\\]/\\&/g' -e 's/\./\\./g')"
 
 cat > "$CONF" <<EOF
 <VirtualHost *:80>
     ServerName storage.local
-$(printf "%b" "$ALIASES")
+    ServerAlias *.${BASE_DOMAIN}
 
     UseCanonicalName Off
+
+    RewriteEngine On
+    RewriteCond %{HTTP_HOST} !\\.${BASE_RE}\$ [NC]
+    RewriteRule ^ - [R=404,L]
+
+    # vladivostok.example.com -> /var/www/vladivostok
     VirtualDocumentRoot "/var/www/%1"
 
     <Directory "/var/www">
