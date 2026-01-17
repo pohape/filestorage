@@ -1,0 +1,10 @@
+services:
+  apache:
+    build: ./apache
+    container_name: apache
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ${DATA_DIR}:/var/www:ro
