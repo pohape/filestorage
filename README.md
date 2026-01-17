@@ -285,9 +285,3 @@ and update Caddy upstream to `127.0.0.1:8081`.
 - Keep `docker/.env` private (`chmod 600 docker/.env`), as it contains admin credentials.
 - Prefer SSH keys over passwords for SFTP.
 - For public deployments, consider adding rate limiting and access logs at the Caddy layer.
-
----
-
-## License
-
-MIT (or your preferred license). If you haven’t added one yet, consider adding `LICENSE`.
