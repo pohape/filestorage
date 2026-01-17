@@ -29,7 +29,7 @@ cat > "$CONF" <<EOF
     DocumentRoot "/var/www"
 
     <Directory "/var/www">
-        Options $INDEX_OPT
+        Options Indexes
         AllowOverride None
         Require valid-user
 
