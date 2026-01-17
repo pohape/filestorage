@@ -15,7 +15,7 @@ cat > "$CONF" <<EOF
     UseCanonicalName Off
 
     RewriteEngine On
-    RewriteCond %{HTTP_HOST} !\\.${BASE_RE}\$ [NC]
+    RewriteCond %{HTTP_HOST} !^[^.]+\\.${BASE_RE}\$ [NC]
     RewriteRule ^ - [R=404,L]
 
     # vladivostok.example.com -> /var/www/vladivostok
