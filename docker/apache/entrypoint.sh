@@ -20,7 +20,6 @@ esac
 CONF="/usr/local/apache2/conf/extra/storage.conf"
 HTPASSWD="/usr/local/apache2/conf/.htpasswd"
 
-# генерируем htpasswd (bcrypt)
 htpasswd -bcB "$HTPASSWD" "$ADMIN_AUTH_USER" "$ADMIN_AUTH_PASS"
 
 cat > "$CONF" <<EOF
@@ -50,7 +49,7 @@ cat > "$CONF" <<EOF
     UseCanonicalName Off
     VirtualDocumentRoot "/var/www/%1"
 
-    <Directory "/var/www">
+    <Directory "/var/www/*">
         Options $INDEX_OPT
         AllowOverride None
         Require all granted
