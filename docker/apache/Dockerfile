@@ -8,6 +8,7 @@ RUN sed -i -E \
     /usr/local/apache2/conf/httpd.conf
 
 RUN echo "ServerName localhost" >> /usr/local/apache2/conf/httpd.conf
+RUN echo "Include conf/extra/run.conf" >> /usr/local/apache2/conf/httpd.conf
 RUN echo "Include conf/extra/storage.conf" >> /usr/local/apache2/conf/httpd.conf
 
 COPY entrypoint.sh /entrypoint.sh
