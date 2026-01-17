@@ -18,6 +18,7 @@ case "$APACHE_INDEXES" in
 esac
 
 CONF="/usr/local/apache2/conf/extra/storage.conf"
+RUNCONF="/usr/local/apache2/conf/extra/run.conf"
 HTPASSWD="/usr/local/apache2/conf/.htpasswd"
 
 # 1) Запускаем воркеры Apache под владельцем смонтированного /var/www
