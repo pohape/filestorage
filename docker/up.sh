@@ -21,6 +21,9 @@ echo ""
 echo "HTTP:"
 echo "  https://*.${BASE_DOMAIN}"
 echo "  https://${ADMIN_SUBDOMAIN}.${BASE_DOMAIN} (admin)"
+if [ -n "${PROTECTED_SUBDOMAIN:-}" ]; then
+    echo "  https://${PROTECTED_SUBDOMAIN}.${BASE_DOMAIN} (protected)"
+fi
 if [ -n "$FTP_ENABLED" ]; then
     FTP_IP=$(curl -s ifconfig.co)
     echo ""
