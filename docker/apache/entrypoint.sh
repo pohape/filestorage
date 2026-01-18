@@ -28,7 +28,14 @@ cat > "$RUNCONF" <<EOF
 User #${RUN_UID}
 Group #${RUN_GID}
 EOF
+
+# Создаём htpasswd с admin пользователем
 htpasswd -bcB "$HTPASSWD" "$ADMIN_AUTH_USER" "$ADMIN_AUTH_PASS"
+
+# Добавляем protected пользователя если задан
+if [ -n "${PROTECTED_SUBDOMAIN:-}" ] && [ -n "${PROTECTED_AUTH_USER:-}" ] && [ -n "${PROTECTED_AUTH_PASS:-}" ]; then
+    htpasswd -bB "$HTPASSWD" "$PROTECTED_AUTH_USER" "$PROTECTED_AUTH_PASS"
+fi
 
 cat > "$CONF" <<EOF
 <VirtualHost *:80>
@@ -49,6 +56,34 @@ cat > "$CONF" <<EOF
         IndexOptions Charset=UTF-8
     </Directory>
 </VirtualHost>
+EOF
+
+# Добавляем protected VirtualHost если задан
+if [ -n "${PROTECTED_SUBDOMAIN:-}" ] && [ -n "${PROTECTED_AUTH_USER:-}" ] && [ -n "${PROTECTED_AUTH_PASS:-}" ]; then
+cat >> "$CONF" <<EOF
+
+<VirtualHost *:80>
+    ServerName ${PROTECTED_SUBDOMAIN}.${BASE_DOMAIN}
+    DocumentRoot "/var/www/${PROTECTED_SUBDOMAIN}"
+
+    <Directory "/var/www/${PROTECTED_SUBDOMAIN}">
+        Options Indexes
+        AllowOverride None
+        Require valid-user
+
+        AuthType Basic
+        AuthName "Protected"
+        AuthUserFile "${HTPASSWD}"
+
+        DirectoryIndex disabled
+        IndexIgnore .*
+        IndexOptions Charset=UTF-8
+    </Directory>
+</VirtualHost>
+EOF
+fi
+
+cat >> "$CONF" <<EOF
 
 <VirtualHost *:80>
     ServerName storage.local
