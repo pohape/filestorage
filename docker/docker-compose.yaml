@@ -8,3 +8,17 @@ services:
       - "127.0.0.1:8080:80"
     volumes:
       - ${DATA_DIR}:/var/www:ro
+
+  ftp:
+    profiles: ["ftp"]
+    build: ./ftp
+    container_name: ftp
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - FTP_USER=${FTP_USER}
+      - FTP_PASS=${FTP_PASS}
+      - FTP_FOLDER=${FTP_FOLDER}
+      - DATA_DIR=${DATA_DIR}
+    volumes:
+      - ${DATA_DIR}:/mnt/data
