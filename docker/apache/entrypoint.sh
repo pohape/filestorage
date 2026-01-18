@@ -46,6 +46,7 @@ cat > "$CONF" <<EOF
 
         DirectoryIndex disabled
         IndexIgnore .*
+        IndexOptions Charset=UTF-8
     </Directory>
 </VirtualHost>
 
@@ -62,6 +63,7 @@ cat > "$CONF" <<EOF
         Require all granted
         DirectoryIndex disabled
         IndexIgnore .*
+        IndexOptions Charset=UTF-8
     </Directory>
 </VirtualHost>
 EOF
