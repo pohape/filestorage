@@ -3,11 +3,12 @@
 A small, practical “static file server” for a Linux server/VPS:
 
 - **Caddy on the host** terminates HTTPS and proxies to localhost.
-- **Apache in Docker** serves folders from a host-mounted `data/` directory.
+- **Apache in Docker** serves folders from a host-mounted `data/` directory and powers a lightweight file manager.
 - Hostname → folder mapping is automatic:
   - `vse.<BASE_DOMAIN>` → `data/vse`
   - `vladivostok.<BASE_DOMAIN>` → `data/vladivostok`
-- An **admin subdomain** (e.g. `dina.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth implemented in Apache**.
+- An **admin subdomain** (e.g. `dina.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth**.
+- An optional **protected subdomain** (e.g. `vladivostok.<BASE_DOMAIN>`) shows a file manager under Basic Auth, while direct file links remain public.
 
 The container mounts your data **read-only**. Uploads/edits are done via SSH/SFTP on the host.
 
@@ -90,13 +91,23 @@ Example:
 DATA_DIR=../data
 BASE_DOMAIN=example.com
 
-# user subdomains listing:
-APACHE_INDEXES=on  # on/off (case-insensitive)
+# file manager language (en/ru)
+FILEMANAGER_LANG=en
 
 # admin domain (always lists the whole storage root)
 ADMIN_SUBDOMAIN=dina
 ADMIN_AUTH_USER=dina
 ADMIN_AUTH_PASS=strong-password-here
+
+# protected subdomain with HTTP Basic Auth (optional)
+PROTECTED_SUBDOMAIN=vladivostok
+PROTECTED_AUTH_USER=vladivostok
+PROTECTED_AUTH_PASS=strong-password-here
+
+# public subdomains file manager (on/off)
+# on  = file manager is shown (no auth required)
+# off = file manager is hidden, only direct file access works
+PUBLIC_LISTING=on
 ```
 
 ### 4) Start Apache container
@@ -160,8 +171,8 @@ dina.example.com {
 
 Apache uses `mod_vhost_alias` and:
 
-- user sites: `VirtualDocumentRoot "/var/www/%1"`
-- admin site: `DocumentRoot "/var/www"`
+- user sites: `VirtualDocumentRoot "/data/%1"`
+- admin site: `DocumentRoot "/var/www/html"` (file manager), with `/data` available at `/files/`
 
 `%1` is the first label of the host name. For example:
 
@@ -182,12 +193,17 @@ data/
 The admin vhost is generated at container start and requires `Require valid-user`
 with a bcrypt htpasswd file. Credentials are taken from `.env`.
 
-Important: the admin domain **always shows directory listing**, regardless of `APACHE_INDEXES`.
+Important: the admin domain **always shows the file manager**, regardless of `PUBLIC_LISTING`.
+
+### Protected vs public subdomains
+
+- **Protected** (`PROTECTED_SUBDOMAIN` set): root (`/`) shows the file manager under Basic Auth, while direct files are public.
+- **Public** (any other subdomain): file manager at `/` only if `PUBLIC_LISTING=on`; direct files are always public.
 
 ### Permission model (important detail)
 
 Apache worker processes drop privileges. This project automatically sets the Apache
-worker UID/GID to match the owner of the mounted `/var/www` using:
+worker UID/GID to match the owner of the mounted `/data` using:
 
 - `stat -c %u /var/www`
 - `stat -c %g /var/www`
@@ -266,7 +282,7 @@ curl -i -H "Host: vse.<BASE_DOMAIN>" http://127.0.0.1:8080/
 
 ### Container restarting in a loop
 
-Usually invalid `.env` values (for example `APACHE_INDEXES`). Check logs:
+Usually invalid `.env` values. Check logs:
 
 ```bash
 docker logs apache --tail=200

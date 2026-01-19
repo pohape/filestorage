@@ -99,7 +99,7 @@ cat >> "$CONF" <<EOF
     # Root or request with ?path= -> file manager (under auth)
     RewriteCond %{REQUEST_URI} ^/?$ [OR]
     RewriteCond %{QUERY_STRING} ^path=
-    RewriteRule ^ /filemanager.php [L]
+    RewriteRule ^ /filemanager.php [L,PT]
 
     # File manager under Basic Auth
     <Location ~ "^/?$">
@@ -158,7 +158,7 @@ cat >> "$CONF" <<EOF
     # Root or request with ?path= -> file manager (no auth)
     RewriteCond %{REQUEST_URI} ^/?$ [OR]
     RewriteCond %{QUERY_STRING} ^path=
-    RewriteRule ^ /filemanager.php [L]
+    RewriteRule ^ /filemanager.php [L,PT]
 EOF
     ;;
     *)
