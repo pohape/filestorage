@@ -21,6 +21,9 @@ echo ""
 echo "HTTP:"
 echo "  https://*.${BASE_DOMAIN}"
 echo "  https://${ADMIN_SUBDOMAIN}.${BASE_DOMAIN} (admin)"
+if [ -n "${PUBLIC_SUBDOMAIN:-}" ]; then
+    echo "  https://${PUBLIC_SUBDOMAIN}.${BASE_DOMAIN} (public)"
+fi
 if [ -n "${PROTECTED_SUBDOMAIN:-}" ]; then
     echo "  https://${PROTECTED_SUBDOMAIN}.${BASE_DOMAIN} (protected)"
 fi
