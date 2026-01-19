@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Bilingual File Manager (EN/RU)
  *
  * Modes (FILEMANAGER_MODE):
- * - admin: shows entire /data folder, everything under auth, links point to admin subdomain
+ * - admin: shows entire /data folder, everything under auth
  * - protected: shows subdomain folder, files accessible without auth
  * - public: shows subdomain folder, files accessible without auth
  */
@@ -56,7 +56,7 @@ $i18n = [
         'files_in_dir' => 'Файлов',
         'modified' => 'Изменён',
         'action' => 'Действие',
-        'copy' => 'Скопировать',
+        'copy' => 'Скопировать ссылку',
         'copied' => 'Готово!',
         'link_copied' => 'Ссылка скопирована!',
         'item' => 'элемент',
@@ -147,12 +147,25 @@ function pluralize(int $n, array $t): string
 
 /**
  * Generate download URL for file
+ * For admin mode: first folder = subdomain, link points to subdomain.domain/path
+ * For files in root of admin: link points to admin.domain/files/filename
  */
 function get_download_url(string $rel, ?string $subdomain, string $domain, string $protocol, string $mode): string
 {
     if ($mode === 'admin') {
-        $adminSubdomain = getenv('ADMIN_SUBDOMAIN') ?: 'admin';
-        return "{$protocol}://{$adminSubdomain}.{$domain}/files/" . url_path($rel);
+        // Split path: first part = subdomain, rest = file path
+        $parts = explode('/', $rel, 2);
+        $firstFolder = $parts[0];
+        $restPath = $parts[1] ?? '';
+
+        if ($restPath !== '') {
+            // File is inside a subdomain folder -> link to subdomain
+            return "{$protocol}://{$firstFolder}.{$domain}/" . url_path($restPath);
+        } else {
+            // File is in root /data -> link to admin/files/
+            $adminSubdomain = getenv('ADMIN_SUBDOMAIN') ?: 'admin';
+            return "{$protocol}://{$adminSubdomain}.{$domain}/files/" . url_path($rel);
+        }
     } else {
         return "{$protocol}://{$subdomain}.{$domain}/" . url_path($rel);
     }
@@ -255,14 +268,14 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
         * { box-sizing: border-box; }
         html, body { height: 100%; }
         body {
-            font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif;
+            font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif;
             margin: 0;
             background: #fafafa;
         }
         .container {
-            max-width: 900px;
-            margin: 24px auto;
-            padding: 0 16px;
+            max-width: 1000px;
+            margin: 32px auto;
+            padding: 0 20px;
         }
         table {
             border-collapse: collapse;
@@ -270,7 +283,7 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
             table-layout: fixed;
         }
         th, td {
-            padding: 8px 10px;
+            padding: 12px 14px;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
             overflow: hidden;
@@ -283,10 +296,10 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
         .meta { color: #666; }
         .badge {
             display: inline-block;
-            padding: 2px 8px;
+            padding: 4px 12px;
             border: 1px solid #999;
             border-radius: 999px;
-            font-size: 12px;
+            font-size: 14px;
             color: #444;
         }
         .badge.admin { background: #fee; border-color: #c00; color: #900; }
@@ -295,26 +308,27 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            gap: 12px;
+            margin-bottom: 16px;
+            gap: 16px;
             flex-wrap: wrap;
         }
         .header-left {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
         }
         .path {
             font-weight: 600;
+            font-size: 18px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         col.col-name { width: auto; }
-        col.col-size { width: 100px; }
-        col.col-count { width: 90px; }
-        col.col-mod { width: 140px; }
-        col.col-action { width: 120px; }
+        col.col-size { width: 110px; }
+        col.col-count { width: 100px; }
+        col.col-mod { width: 160px; }
+        col.col-action { width: 170px; }
         thead th:nth-child(2),
         thead th:nth-child(3),
         thead th:nth-child(4),
@@ -325,27 +339,29 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
             font-variant-numeric: tabular-nums;
         }
         .copy-btn {
-            padding: 4px 10px;
-            font-size: 12px;
+            padding: 6px 14px;
+            font-size: 14px;
             background: #0068c9;
             color: #fff;
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
             transition: background 0.2s;
+            white-space: nowrap;
         }
         .copy-btn:hover { background: #0050a0; }
         .copy-btn:active { background: #003d7a; }
         .copy-btn.copied { background: #28a745; }
         .toast {
             position: fixed;
-            bottom: 20px;
+            bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
             background: #333;
             color: #fff;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-size: 15px;
             opacity: 0;
             transition: opacity 0.3s;
             z-index: 1000;
@@ -353,12 +369,13 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
         .toast.show { opacity: 1; }
         .back-link {
             display: inline-block;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            font-size: 16px;
             color: #0068c9;
             text-decoration: none;
         }
         .back-link:hover { text-decoration: underline; }
-        @media (max-width: 700px) {
+        @media (max-width: 800px) {
             col.col-count, th:nth-child(3), td:nth-child(3) { display: none; }
             col.col-mod, th:nth-child(4), td:nth-child(4) { display: none; }
         }
@@ -415,18 +432,7 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
                 </tr>
             <?php else:
                 $size = format_size((int)($e['size'] ?? 0), $t);
-                $showCopyBtn = false;
-                $downloadUrl = '';
-
-                if ($MODE === 'admin') {
-                    if ($rel !== '') {
-                        $showCopyBtn = true;
-                        $downloadUrl = get_download_url($childRel, $SUBDOMAIN, $BASE_DOMAIN, $PROTOCOL, $MODE);
-                    }
-                } else {
-                    $showCopyBtn = true;
-                    $downloadUrl = get_download_url($childRel, $SUBDOMAIN, $BASE_DOMAIN, $PROTOCOL, $MODE);
-                }
+                $downloadUrl = get_download_url($childRel, $SUBDOMAIN, $BASE_DOMAIN, $PROTOCOL, $MODE);
             ?>
                 <tr>
                     <td class="name">📄 <?= h($e['name']) ?></td>
@@ -434,9 +440,7 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
                     <td class="meta">—</td>
                     <td class="meta"><?= h($modified) ?></td>
                     <td>
-                        <?php if ($showCopyBtn): ?>
                         <button class="copy-btn" data-url="<?= h($downloadUrl) ?>" onclick="copyLink(this)"><?= h($t['copy']) ?></button>
-                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endif; endforeach; ?>
