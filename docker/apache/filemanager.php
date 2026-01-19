@@ -135,19 +135,40 @@ function format_size(int $bytes, array $t): string
 
 function storage_stats(string $path): array
 {
-    $total = @disk_total_space($path);
     $free = @disk_free_space($path);
-    if ($total === false || $free === false || $total <= 0) {
-        return [
-            'ok' => false,
-            'total' => 0,
-            'used' => 0,
-            'free' => 0,
-            'percent' => 0,
-        ];
+    $used = null;
+
+    // Prefer actual directory usage (du), so data outside /data isn't counted.
+    $duBin = trim((string) @shell_exec('command -v du'));
+    if ($duBin !== '') {
+        $cmd = escapeshellcmd($duBin) . ' -sb ' . escapeshellarg($path) . ' 2>/dev/null';
+        $out = trim((string) @shell_exec($cmd));
+        if ($out !== '') {
+            $parts = preg_split('/\s+/', $out);
+            if (isset($parts[0]) && ctype_digit($parts[0])) {
+                $used = (int) $parts[0];
+            }
+        }
     }
-    $used = max(0, $total - $free);
-    $percent = (int) round(($used / $total) * 100);
+
+    if ($free === false || $used === null) {
+        $total = @disk_total_space($path);
+        if ($total === false || $free === false || $total <= 0) {
+            return [
+                'ok' => false,
+                'total' => 0,
+                'used' => 0,
+                'free' => 0,
+                'percent' => 0,
+            ];
+        }
+        $used = max(0, $total - $free);
+        $total = (int) $total;
+    } else {
+        $total = (int) ($used + $free);
+    }
+
+    $percent = $total > 0 ? (int) round(($used / $total) * 100) : 0;
     return [
         'ok' => true,
         'total' => (int) $total,

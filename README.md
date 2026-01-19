@@ -219,6 +219,8 @@ On the admin domain the file manager displays a usage bar based on `/data`:
 
 - Used, free, and total space
 - Percent used (progress bar)
+Note: used space is calculated from the `/data` directory only (via `du`), so
+other files on the same disk are not counted.
 
 ### Admin copy links for protected subdomain
 
