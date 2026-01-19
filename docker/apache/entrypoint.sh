@@ -63,7 +63,7 @@ cat > "$CONF" <<EOF
 
         RewriteEngine On
         RewriteCond %{REQUEST_FILENAME} -d
-        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
+        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [B,L,PT,QSA]
     </Directory>
 
     <Files "filemanager.php">
@@ -119,7 +119,7 @@ cat >> "$CONF" <<EOF
 
         RewriteEngine On
         RewriteCond %{REQUEST_FILENAME} -d
-        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
+        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [B,L,PT,QSA]
     </Directory>
 </VirtualHost>
 EOF
@@ -157,7 +157,7 @@ cat >> "$CONF" <<EOF
     # Directories -> file manager (no auth)
     RewriteCond %{REQUEST_URI} !^/filemanager\.php$
     RewriteRule ^/$ /filemanager.php [L,PT,QSA]
-    RewriteRule ^/(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
+    RewriteRule ^/(.+)/$ /filemanager.php?path=${DOLLAR}1 [B,L,PT,QSA]
 EOF
     ;;
     *)
