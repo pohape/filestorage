@@ -5,7 +5,6 @@ set -eu
 : "${ADMIN_SUBDOMAIN:?ADMIN_SUBDOMAIN is required}"
 : "${ADMIN_AUTH_USER:?ADMIN_AUTH_USER is required}"
 : "${ADMIN_AUTH_PASS:?ADMIN_AUTH_PASS is required}"
-: "${APACHE_INDEXES:=}"
 : "${PUBLIC_LISTING:=on}"
 : "${FILEMANAGER_LANG:=en}"
 
@@ -13,15 +12,6 @@ BASE_DOMAIN="$(printf '%s' "$BASE_DOMAIN" | tr -d '[:space:]' | sed 's/\.$//')"
 ADMIN_SUBDOMAIN="$(printf '%s' "$ADMIN_SUBDOMAIN" | tr -d '[:space:]')"
 PUBLIC_LISTING="$(printf '%s' "$PUBLIC_LISTING" | tr '[:upper:]' '[:lower:]')"
 FILEMANAGER_LANG="$(printf '%s' "$FILEMANAGER_LANG" | tr '[:upper:]' '[:lower:]')"
-APACHE_INDEXES="$(printf '%s' "$APACHE_INDEXES" | tr '[:upper:]' '[:lower:]')"
-
-# Backward compatibility: APACHE_INDEXES overrides PUBLIC_LISTING when set
-if [ -n "$APACHE_INDEXES" ]; then
-    case "$APACHE_INDEXES" in
-        on|true|1) PUBLIC_LISTING="on" ;;
-        off|false|0) PUBLIC_LISTING="off" ;;
-    esac
-fi
 DOLLAR='$'
 
 CONF="/etc/apache2/sites-available/storage.conf"
