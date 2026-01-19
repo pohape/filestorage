@@ -60,6 +60,10 @@ cat > "$CONF" <<EOF
         AuthType Basic
         AuthName "Admin"
         AuthUserFile "${HTPASSWD}"
+
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
     </Directory>
 
     <Files "filemanager.php">
@@ -69,10 +73,6 @@ cat > "$CONF" <<EOF
         Require valid-user
     </Files>
 
-    RewriteEngine On
-    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
-    RewriteRule ^$ /filemanager.php [L,PT,QSA]
-    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
 </VirtualHost>
 EOF
 
@@ -96,13 +96,6 @@ cat >> "$CONF" <<EOF
     # Alias for file manager
     Alias /filemanager.php ${FILEMANAGER}
 
-    RewriteEngine On
-
-    # Directories -> file manager (under auth)
-    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
-    RewriteRule ^$ /filemanager.php [L,PT,QSA]
-    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
-
     # File manager under Basic Auth
     <Location ~ "^/?$">
         AuthType Basic
@@ -123,6 +116,10 @@ cat >> "$CONF" <<EOF
         Options -Indexes
         AllowOverride None
         Require all granted
+
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
     </Directory>
 </VirtualHost>
 EOF
@@ -149,7 +146,6 @@ cat >> "$CONF" <<EOF
     # Alias for file manager
     Alias /filemanager.php ${FILEMANAGER}
 
-    RewriteEngine On
 EOF
 
 # Add file manager routing only if PUBLIC_LISTING is enabled
@@ -158,17 +154,22 @@ case "$PUBLIC_LISTING" in
 cat >> "$CONF" <<EOF
 
     # Directories -> file manager (no auth)
-    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
-    RewriteRule ^$ /filemanager.php [L,PT,QSA]
-    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
+    <Directory "/data">
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
+    </Directory>
 EOF
     ;;
     *)
 cat >> "$CONF" <<EOF
 
     # File manager disabled - return 403 for any directory request
-    RewriteCond %{REQUEST_URI} /$
-    RewriteRule ^ - [F,L]
+    <Directory "/data">
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^ - [F,L]
+    </Directory>
 EOF
     ;;
 esac
