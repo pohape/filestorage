@@ -216,6 +216,12 @@ On the admin domain the file manager displays a usage bar based on `/data`:
 - Used, free, and total space
 - Percent used (progress bar)
 
+### Admin copy links for protected subdomain
+
+If `PROTECTED_SUBDOMAIN` is set, the admin file manager will copy links for that
+folder to the protected subdomain (e.g. `https://vladivostok.<BASE_DOMAIN>/...`)
+so you can share links with non-admin users.
+
 ### Permission model (important detail)
 
 Apache worker processes drop privileges. This project automatically sets the Apache

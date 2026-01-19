@@ -185,6 +185,14 @@ function get_download_url(string $rel, ?string $subdomain, string $domain, strin
 {
     if ($mode === 'admin') {
         $adminSubdomain = getenv('ADMIN_SUBDOMAIN') ?: 'admin';
+        $protectedSubdomain = getenv('PROTECTED_SUBDOMAIN') ?: '';
+        if ($protectedSubdomain !== '') {
+            $prefix = rtrim($protectedSubdomain, '/') . '/';
+            if ($rel === $protectedSubdomain || str_starts_with($rel, $prefix)) {
+                $rest = $rel === $protectedSubdomain ? '' : substr($rel, strlen($prefix));
+                return "{$protocol}://{$protectedSubdomain}.{$domain}/" . url_path($rest);
+            }
+        }
         return "{$protocol}://{$adminSubdomain}.{$domain}/" . url_path($rel);
     }
     return "{$protocol}://{$subdomain}.{$domain}/" . url_path($rel);
