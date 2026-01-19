@@ -104,6 +104,10 @@ PROTECTED_SUBDOMAIN=vladivostok
 PROTECTED_AUTH_USER=vladivostok
 PROTECTED_AUTH_PASS=strong-password-here
 
+# public subdomain for shareable links (optional)
+# if set, admin copy-links for that folder point to this public subdomain
+PUBLIC_SUBDOMAIN=vse
+
 # public subdomains file manager (on/off)
 # on  = file manager is shown (no auth required)
 # off = file manager is hidden, only direct file access works
@@ -221,6 +225,9 @@ On the admin domain the file manager displays a usage bar based on `/data`:
 If `PROTECTED_SUBDOMAIN` is set, the admin file manager will copy links for that
 folder to the protected subdomain (e.g. `https://vladivostok.<BASE_DOMAIN>/...`)
 so you can share links with non-admin users.
+
+If `PUBLIC_SUBDOMAIN` is set, the admin file manager will copy links for that
+folder to the public subdomain (e.g. `https://vse.<BASE_DOMAIN>/...`).
 
 ### Permission model (important detail)
 
