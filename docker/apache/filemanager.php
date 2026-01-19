@@ -564,7 +564,7 @@ $stats = $SHOW_STORAGE_STATS ? storage_stats('/data') : ['ok' => false];
                 $downloadUrl = get_download_url($childRel, $SUBDOMAIN, $BASE_DOMAIN, $PROTOCOL, $MODE);
             ?>
                 <tr>
-                    <td class="name">📄 <?= h($e['name']) ?></td>
+                    <td class="name">📄 <a href="<?= h($downloadUrl) ?>" target="_blank" rel="noopener noreferrer"><?= h($e['name']) ?></a></td>
                     <td class="meta"><?= h($size) ?></td>
                     <td class="meta">—</td>
                     <td class="meta"><?= h($modified) ?></td>
