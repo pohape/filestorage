@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/docker"
 
 [ -f .env ] && . ./.env
 
