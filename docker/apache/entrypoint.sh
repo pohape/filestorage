@@ -5,6 +5,7 @@ set -eu
 : "${ADMIN_SUBDOMAIN:?ADMIN_SUBDOMAIN is required}"
 : "${ADMIN_AUTH_USER:?ADMIN_AUTH_USER is required}"
 : "${ADMIN_AUTH_PASS:?ADMIN_AUTH_PASS is required}"
+: "${APACHE_INDEXES:=}"
 : "${PUBLIC_LISTING:=on}"
 : "${FILEMANAGER_LANG:=en}"
 
@@ -12,6 +13,15 @@ BASE_DOMAIN="$(printf '%s' "$BASE_DOMAIN" | tr -d '[:space:]' | sed 's/\.$//')"
 ADMIN_SUBDOMAIN="$(printf '%s' "$ADMIN_SUBDOMAIN" | tr -d '[:space:]')"
 PUBLIC_LISTING="$(printf '%s' "$PUBLIC_LISTING" | tr '[:upper:]' '[:lower:]')"
 FILEMANAGER_LANG="$(printf '%s' "$FILEMANAGER_LANG" | tr '[:upper:]' '[:lower:]')"
+APACHE_INDEXES="$(printf '%s' "$APACHE_INDEXES" | tr '[:upper:]' '[:lower:]')"
+
+# Backward compatibility: APACHE_INDEXES overrides PUBLIC_LISTING when set
+if [ -n "$APACHE_INDEXES" ]; then
+    case "$APACHE_INDEXES" in
+        on|true|1) PUBLIC_LISTING="on" ;;
+        off|false|0) PUBLIC_LISTING="off" ;;
+    esac
+fi
 DOLLAR='$'
 
 CONF="/etc/apache2/sites-available/storage.conf"
@@ -146,6 +156,7 @@ cat >> "$CONF" <<EOF
     # Alias for file manager
     Alias /filemanager.php ${FILEMANAGER}
 
+    RewriteEngine On
 EOF
 
 # Add file manager routing only if PUBLIC_LISTING is enabled
@@ -154,22 +165,15 @@ case "$PUBLIC_LISTING" in
 cat >> "$CONF" <<EOF
 
     # Directories -> file manager (no auth)
-    <Directory "/data">
-        RewriteEngine On
-        RewriteCond %{REQUEST_FILENAME} -d
-        RewriteRule ^(.*)$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
-    </Directory>
+    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
+    RewriteRule ^/$ /filemanager.php [L,PT,QSA]
+    RewriteRule ^/(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
 EOF
     ;;
     *)
 cat >> "$CONF" <<EOF
 
-    # File manager disabled - return 403 for any directory request
-    <Directory "/data">
-        RewriteEngine On
-        RewriteCond %{REQUEST_FILENAME} -d
-        RewriteRule ^ - [F,L]
-    </Directory>
+    # File manager disabled - rely on Options -Indexes (no directory listing)
 EOF
     ;;
 esac
