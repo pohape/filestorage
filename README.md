@@ -7,8 +7,8 @@ A small, practical “static file server” for a Linux server/VPS:
 - Hostname → folder mapping is automatic:
   - `vse.<BASE_DOMAIN>` → `data/vse`
   - `vladivostok.<BASE_DOMAIN>` → `data/vladivostok`
-- An **admin subdomain** (e.g. `dina.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth**.
-- An optional **protected subdomain** (e.g. `vladivostok.<BASE_DOMAIN>`) shows a file manager under Basic Auth, while direct file links remain public.
+- An **admin subdomain** (e.g. `dina.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth**. Direct file links are available at the root (`/some/file.txt`), without `/files`. The admin file manager shows disk usage (used/free) with a progress bar.
+- An optional **protected subdomain** (e.g. `vladivostok.<BASE_DOMAIN>`) shows a file manager under Basic Auth, while direct file links remain public (also without `/files`).
 
 The container mounts your data **read-only**. Uploads/edits are done via SSH/SFTP on the host.
 
@@ -172,7 +172,7 @@ dina.example.com {
 Apache uses `mod_vhost_alias` and:
 
 - user sites: `VirtualDocumentRoot "/data/%1"`
-- admin site: `DocumentRoot "/var/www/html"` (file manager), with `/data` available at `/files/`
+- admin site: `DocumentRoot "/data"` with a file manager routed to directories
 
 `%1` is the first label of the host name. For example:
 
@@ -199,6 +199,21 @@ Important: the admin domain **always shows the file manager**, regardless of `PU
 
 - **Protected** (`PROTECTED_SUBDOMAIN` set): root (`/`) shows the file manager under Basic Auth, while direct files are public.
 - **Public** (any other subdomain): file manager at `/` only if `PUBLIC_LISTING=on`; direct files are always public.
+
+### File manager URLs
+
+The file manager uses “pretty” paths. Instead of `/?path=...` it shows directories like:
+
+```
+https://dina.example.com/Reports/2025/?sort=name&order=asc
+```
+
+### Admin disk usage
+
+On the admin domain the file manager displays a usage bar based on `/data`:
+
+- Used, free, and total space
+- Percent used (progress bar)
 
 ### Permission model (important detail)
 

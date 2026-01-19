@@ -12,6 +12,7 @@ BASE_DOMAIN="$(printf '%s' "$BASE_DOMAIN" | tr -d '[:space:]' | sed 's/\.$//')"
 ADMIN_SUBDOMAIN="$(printf '%s' "$ADMIN_SUBDOMAIN" | tr -d '[:space:]')"
 PUBLIC_LISTING="$(printf '%s' "$PUBLIC_LISTING" | tr '[:upper:]' '[:lower:]')"
 FILEMANAGER_LANG="$(printf '%s' "$FILEMANAGER_LANG" | tr '[:upper:]' '[:lower:]')"
+DOLLAR='$'
 
 CONF="/etc/apache2/sites-available/storage.conf"
 HTPASSWD="/etc/apache2/.htpasswd"
@@ -35,20 +36,23 @@ sed -i "s/APACHE_RUN_GROUP=.*/APACHE_RUN_GROUP=#${RUN_GID}/" /etc/apache2/envvar
 # ============================================================
 # ADMIN VirtualHost
 # - File manager under Basic Auth, sees entire /data folder
-# - Files also under Basic Auth via /files/
+# - Files also under Basic Auth at root (no /files prefix)
 # ============================================================
 cat > "$CONF" <<EOF
 <VirtualHost *:80>
     ServerName ${ADMIN_SUBDOMAIN}.${BASE_DOMAIN}
-    DocumentRoot "/var/www/html"
+    DocumentRoot "/data"
 
     SetEnv FILEMANAGER_MODE "admin"
     SetEnv FILEMANAGER_LANG "${FILEMANAGER_LANG}"
     SetEnv BASE_DOMAIN "${BASE_DOMAIN}"
     SetEnv ADMIN_SUBDOMAIN "${ADMIN_SUBDOMAIN}"
 
-    # File manager - root
-    <Directory "/var/www/html">
+    # File manager script
+    Alias /filemanager.php ${FILEMANAGER}
+
+    # All files require auth
+    <Directory "/data">
         Options -Indexes
         AllowOverride None
         Require valid-user
@@ -56,21 +60,19 @@ cat > "$CONF" <<EOF
         AuthType Basic
         AuthName "Admin"
         AuthUserFile "${HTPASSWD}"
-
-        DirectoryIndex filemanager.php
     </Directory>
 
-    # Direct file access via /files/ (also under auth)
-    Alias /files /data
-    <Directory "/data">
-        Options -Indexes
-        AllowOverride None
-        Require valid-user
-
+    <Files "filemanager.php">
         AuthType Basic
-        AuthName "Admin Files"
+        AuthName "Admin"
         AuthUserFile "${HTPASSWD}"
-    </Directory>
+        Require valid-user
+    </Files>
+
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
+    RewriteRule ^$ /filemanager.php [L,PT,QSA]
+    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
 </VirtualHost>
 EOF
 
@@ -96,10 +98,10 @@ cat >> "$CONF" <<EOF
 
     RewriteEngine On
 
-    # Root or request with ?path= -> file manager (under auth)
-    RewriteCond %{REQUEST_URI} ^/?$ [OR]
-    RewriteCond %{QUERY_STRING} ^path=
-    RewriteRule ^ /filemanager.php [L,PT]
+    # Directories -> file manager (under auth)
+    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
+    RewriteRule ^$ /filemanager.php [L,PT,QSA]
+    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
 
     # File manager under Basic Auth
     <Location ~ "^/?$">
@@ -155,18 +157,17 @@ case "$PUBLIC_LISTING" in
     on|true|1)
 cat >> "$CONF" <<EOF
 
-    # Root or request with ?path= -> file manager (no auth)
-    RewriteCond %{REQUEST_URI} ^/?$ [OR]
-    RewriteCond %{QUERY_STRING} ^path=
-    RewriteRule ^ /filemanager.php [L,PT]
+    # Directories -> file manager (no auth)
+    RewriteCond %{REQUEST_URI} !^/filemanager\.php$
+    RewriteRule ^$ /filemanager.php [L,PT,QSA]
+    RewriteRule ^(.+)/$ /filemanager.php?path=${DOLLAR}1 [L,PT,QSA]
 EOF
     ;;
     *)
 cat >> "$CONF" <<EOF
 
-    # File manager disabled - return 403 for root and ?path= requests
-    RewriteCond %{REQUEST_URI} ^/?$ [OR]
-    RewriteCond %{QUERY_STRING} ^path=
+    # File manager disabled - return 403 for any directory request
+    RewriteCond %{REQUEST_URI} /$
     RewriteRule ^ - [F,L]
 EOF
     ;;

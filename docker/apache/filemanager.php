@@ -14,6 +14,7 @@ $MODE = getenv('FILEMANAGER_MODE') ?: 'public';
 $LANG = getenv('FILEMANAGER_LANG') ?: 'en';
 $BASE_DOMAIN = getenv('BASE_DOMAIN') ?: 'example.com';
 $PROTOCOL = 'https';
+$SHOW_STORAGE_STATS = ($MODE === 'admin');
 
 // Translations
 $i18n = [
@@ -34,6 +35,9 @@ $i18n = [
         'copy' => 'Copy link',
         'copied' => 'Copied!',
         'link_copied' => 'Link copied!',
+        'storage' => 'Storage',
+        'used_of_total' => 'Used',
+        'free' => 'Free',
         'item' => 'item',
         'items_few' => 'items',
         'items_many' => 'items',
@@ -59,6 +63,9 @@ $i18n = [
         'copy' => 'Скопировать ссылку',
         'copied' => 'Готово!',
         'link_copied' => 'Ссылка скопирована!',
+        'storage' => 'Хранилище',
+        'used_of_total' => 'Использовано',
+        'free' => 'Свободно',
         'item' => 'элемент',
         'items_few' => 'элемента',
         'items_many' => 'элементов',
@@ -126,6 +133,30 @@ function format_size(int $bytes, array $t): string
     return $bytes . ' ' . $t['b'];
 }
 
+function storage_stats(string $path): array
+{
+    $total = @disk_total_space($path);
+    $free = @disk_free_space($path);
+    if ($total === false || $free === false || $total <= 0) {
+        return [
+            'ok' => false,
+            'total' => 0,
+            'used' => 0,
+            'free' => 0,
+            'percent' => 0,
+        ];
+    }
+    $used = max(0, $total - $free);
+    $percent = (int) round(($used / $total) * 100);
+    return [
+        'ok' => true,
+        'total' => (int) $total,
+        'used' => (int) $used,
+        'free' => (int) $free,
+        'percent' => max(0, min(100, $percent)),
+    ];
+}
+
 function dir_file_count(string $dir): int
 {
     $items = @scandir($dir);
@@ -153,25 +184,36 @@ function pluralize(int $n, array $t): string
 function get_download_url(string $rel, ?string $subdomain, string $domain, string $protocol, string $mode): string
 {
     if ($mode === 'admin') {
-        // Split path: first part = subdomain, rest = file path
-        $parts = explode('/', $rel, 2);
-        $firstFolder = $parts[0];
-        $restPath = $parts[1] ?? '';
-
-        if ($restPath !== '') {
-            // File is inside a subdomain folder -> link to subdomain
-            return "{$protocol}://{$firstFolder}.{$domain}/" . url_path($restPath);
-        } else {
-            // File is in root /data -> link to admin/files/
-            $adminSubdomain = getenv('ADMIN_SUBDOMAIN') ?: 'admin';
-            return "{$protocol}://{$adminSubdomain}.{$domain}/files/" . url_path($rel);
-        }
-    } else {
-        return "{$protocol}://{$subdomain}.{$domain}/" . url_path($rel);
+        $adminSubdomain = getenv('ADMIN_SUBDOMAIN') ?: 'admin';
+        return "{$protocol}://{$adminSubdomain}.{$domain}/" . url_path($rel);
     }
+    return "{$protocol}://{$subdomain}.{$domain}/" . url_path($rel);
 }
 
-$rel = isset($_GET['path']) ? sanitize_rel((string) $_GET['path']) : '';
+function rel_from_request(): string
+{
+    if (isset($_GET['path'])) {
+        return sanitize_rel((string) $_GET['path']);
+    }
+    $uriPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    if ($uriPath === '/filemanager.php') {
+        return '';
+    }
+    $decoded = rawurldecode($uriPath);
+    return sanitize_rel($decoded);
+}
+
+function build_path_url(string $rel, array $query = [], bool $isDir = true): string
+{
+    $path = $rel === '' ? '/' : '/' . url_path($rel);
+    if ($rel !== '' && $isDir) {
+        $path .= '/';
+    }
+    $qs = $query ? ('?' . http_build_query($query)) : '';
+    return $path . $qs;
+}
+
+$rel = rel_from_request();
 $abs = rtrim($BASE . ($rel === '' ? '' : '/' . $rel), '/');
 
 if (!is_dir($abs)) {
@@ -243,9 +285,9 @@ usort($entries, function (array $a, array $b) use ($sort, $order): int {
 function sort_link(string $label, string $key, string $currentSort, string $currentOrder, string $rel): string
 {
     $nextOrder = ($currentSort === $key && $currentOrder === 'asc') ? 'desc' : 'asc';
-    $q = http_build_query(['path' => $rel, 'sort' => $key, 'order' => $nextOrder]);
+    $href = build_path_url($rel, ['sort' => $key, 'order' => $nextOrder], true);
     $arrow = $currentSort === $key ? ($currentOrder === 'asc' ? '↑' : '↓') : '';
-    return '<a href="?' . $q . '">' . h($label) . ' ' . $arrow . '</a>';
+    return '<a href="' . h($href) . '">' . h($label) . ' ' . $arrow . '</a>';
 }
 
 $parentRel = '';
@@ -257,6 +299,7 @@ if ($rel !== '') {
 
 $pageTitle = $MODE === 'admin' ? $t['admin_panel'] : h($SUBDOMAIN);
 $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
+$stats = $SHOW_STORAGE_STATS ? storage_stats('/data') : ['ok' => false];
 ?>
 <!doctype html>
 <html lang="<?= $htmlLang ?>">
@@ -316,6 +359,54 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
             display: flex;
             align-items: center;
             gap: 16px;
+        }
+        .stats {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: #fff;
+            border: 1px solid #eee;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            min-width: 280px;
+        }
+        .stats-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 120px;
+        }
+        .stats-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #888;
+        }
+        .stats-values {
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
+            color: #333;
+        }
+        .progress {
+            position: relative;
+            height: 10px;
+            background: #edf1f5;
+            border-radius: 999px;
+            overflow: hidden;
+            flex: 1;
+            min-width: 140px;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #22c55e);
+        }
+        .progress-label {
+            font-size: 12px;
+            color: #666;
+            margin-left: 6px;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
         }
         .path {
             font-weight: 600;
@@ -378,6 +469,7 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
         @media (max-width: 800px) {
             col.col-count, th:nth-child(3), td:nth-child(3) { display: none; }
             col.col-mod, th:nth-child(4), td:nth-child(4) { display: none; }
+            .stats { width: 100%; }
         }
     </style>
 </head>
@@ -392,11 +484,27 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
                 <span class="badge protected"><?= h($t['protected_badge']) ?></span>
                 <?php endif; ?>
             </div>
+            <?php if ($SHOW_STORAGE_STATS && ($stats['ok'] ?? false)): ?>
+            <div class="stats">
+                <div class="stats-meta">
+                    <div class="stats-title"><?= h($t['storage']) ?></div>
+                    <div class="stats-values">
+                        <?= h($t['used_of_total']) ?>: <?= h(format_size((int) $stats['used'], $t)) ?> / <?= h(format_size((int) $stats['total'], $t)) ?><br>
+                        <?= h($t['free']) ?>: <?= h(format_size((int) $stats['free'], $t)) ?>
+                    </div>
+                </div>
+                <div class="progress" aria-label="Storage used">
+                    <div class="progress-bar" style="width: <?= (int) $stats['percent'] ?>%;"></div>
+                </div>
+                <div class="progress-label"><?= (int) $stats['percent'] ?>%</div>
+            </div>
+            <?php else: ?>
             <div class="badge"><?= count($entries) ?> <?= pluralize(count($entries), $t) ?></div>
+            <?php endif; ?>
         </div>
 
         <?php if ($rel !== ''): ?>
-            <a class="back-link" href="?<?= http_build_query(['path' => $parentRel, 'sort' => $sort, 'order' => $order]) ?>">← <?= h($t['back']) ?></a>
+            <a class="back-link" href="<?= h(build_path_url($parentRel, ['sort' => $sort, 'order' => $order], true)) ?>">← <?= h($t['back']) ?></a>
         <?php endif; ?>
 
         <table>
@@ -424,7 +532,7 @@ $htmlLang = $LANG === 'ru' ? 'ru' : 'en';
                 if ($e['type'] === 'dir'):
             ?>
                 <tr>
-                    <td class="name">📁 <a href="?<?= http_build_query(['path' => $childRel, 'sort' => $sort, 'order' => $order]) ?>"><?= h($e['name']) ?></a></td>
+                    <td class="name">📁 <a href="<?= h(build_path_url($childRel, ['sort' => $sort, 'order' => $order], true)) ?>"><?= h($e['name']) ?></a></td>
                     <td class="meta">—</td>
                     <td class="meta"><?= (int)($e['count'] ?? 0) ?></td>
                     <td class="meta"><?= h($modified) ?></td>
