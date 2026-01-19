@@ -195,7 +195,9 @@ function get_download_url(string $rel, ?string $subdomain, string $domain, strin
                 $rest = $rel === $protectedSubdomain ? '' : substr($rel, strlen($prefix));
                 return "{$protocol}://{$protectedSubdomain}.{$domain}/" . url_path($rest);
             }
-        } elseif ($publicSubdomain !== '') {
+        }
+
+        if ($publicSubdomain !== '') {
             $prefix = rtrim($publicSubdomain, '/') . '/';
 
             if ($rel === $publicSubdomain || str_starts_with($rel, $prefix)) {
