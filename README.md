@@ -108,6 +108,9 @@ PROTECTED_AUTH_PASS=strong-password-here
 # on  = file manager is shown (no auth required)
 # off = file manager is hidden, only direct file access works
 PUBLIC_LISTING=on
+
+# compatibility: APACHE_INDEXES (on/off) overrides PUBLIC_LISTING when set
+#APACHE_INDEXES=on
 ```
 
 ### 4) Start Apache container
