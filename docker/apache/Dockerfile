@@ -1,17 +1,9 @@
-FROM httpd:2.4
+FROM php:8.3-apache
 
-RUN sed -i -E \
-    -e 's/^#(LoadModule vhost_alias_module .*)/\1/' \
-    -e 's/^#(LoadModule autoindex_module .*)/\1/' \
-    -e 's/^#(LoadModule auth_basic_module .*)/\1/' \
-    -e 's/^#(LoadModule authn_file_module .*)/\1/' \
-    /usr/local/apache2/conf/httpd.conf
-
-RUN echo "ServerName localhost" >> /usr/local/apache2/conf/httpd.conf
-RUN echo "Include conf/extra/run.conf" >> /usr/local/apache2/conf/httpd.conf
-RUN echo "Include conf/extra/storage.conf" >> /usr/local/apache2/conf/httpd.conf
-
+RUN a2enmod vhost_alias auth_basic authn_file rewrite
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+COPY filemanager.php /var/www/html/filemanager.php
 
 ENTRYPOINT ["/entrypoint.sh"]
