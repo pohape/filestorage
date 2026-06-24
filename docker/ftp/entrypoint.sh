@@ -21,6 +21,10 @@ addgroup -g "$RUN_GID" ftpgroup 2>/dev/null || true
 adduser -D -h "$FTP_ROOT" -u "$RUN_UID" -G ftpgroup "$FTP_USER" 2>/dev/null || true
 echo "$FTP_USER:$FTP_PASS" | chpasswd
 
+# vsftpd writes its own-format log (incl. "FAIL LOGIN" lines) to this file so a
+# host-side fail2ban jail can ban FTP brute-force. The dir is bind-mounted to the host.
+mkdir -p /var/log/vsftpd
+
 # Generate vsftpd config
 cat > /etc/vsftpd/vsftpd.conf <<EOF
 listen=YES
@@ -35,6 +39,12 @@ pasv_min_port=21100
 pasv_max_port=21102
 seccomp_sandbox=NO
 background=NO
+
+# Logging for fail2ban (vsftpd own format -> records FAIL LOGIN with client IP)
+xferlog_enable=YES
+xferlog_std_format=NO
+vsftpd_log_file=/var/log/vsftpd/vsftpd.log
+log_ftp_protocol=NO
 EOF
 
 exec vsftpd /etc/vsftpd/vsftpd.conf

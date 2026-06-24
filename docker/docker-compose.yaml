@@ -22,3 +22,5 @@ services:
       - DATA_DIR=${DATA_DIR}
     volumes:
       - ${DATA_DIR}:/mnt/data
+      # vsftpd log exposed to host so a fail2ban [vsftpd] jail can read it
+      - /var/log/vsftpd:/var/log/vsftpd
