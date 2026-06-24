@@ -20,8 +20,8 @@ vse.example.com {
     }
 }
 
-# dina.<BASE_DOMAIN> -> <DATA_DIR> root (admin, Basic Auth enforced by Apache)
-dina.example.com {
+# admin.<BASE_DOMAIN> -> <DATA_DIR> root (admin, Basic Auth enforced by Apache)
+admin.example.com {
     reverse_proxy 127.0.0.1:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}

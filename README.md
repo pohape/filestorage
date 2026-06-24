@@ -7,7 +7,7 @@ A small, practical “static file server” for a Linux server/VPS:
 - Hostname → folder mapping is automatic:
   - `vse.<BASE_DOMAIN>` → `data/vse`
   - `vladivostok.<BASE_DOMAIN>` → `data/vladivostok`
-- An **admin subdomain** (e.g. `dina.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth**. Direct file links are available at the root (`/some/file.txt`), without `/files`. The admin file manager shows disk usage (used/free) with a progress bar.
+- An **admin subdomain** (e.g. `admin.<BASE_DOMAIN>`) shows the entire storage root and is protected by **HTTP Basic Auth**. Direct file links are available at the root (`/some/file.txt`), without `/files`. The admin file manager shows disk usage (used/free) with a progress bar.
 - An optional **protected subdomain** (e.g. `vladivostok.<BASE_DOMAIN>`) shows a file manager under Basic Auth, while direct file links remain public (also without `/files`).
 
 The container mounts your data **read-only**. Uploads/edits are done via SSH/SFTP on the host.
@@ -95,8 +95,8 @@ BASE_DOMAIN=example.com
 FILEMANAGER_LANG=en
 
 # admin domain (always lists the whole storage root)
-ADMIN_SUBDOMAIN=dina
-ADMIN_AUTH_USER=dina
+ADMIN_SUBDOMAIN=admin
+ADMIN_AUTH_USER=admin
 ADMIN_AUTH_PASS=strong-password-here
 
 # protected subdomain with HTTP Basic Auth (optional)
@@ -159,7 +159,7 @@ vse.example.com {
 }
 
 # admin domain (Basic Auth is enforced by Apache, not by Caddy)
-dina.example.com {
+admin.example.com {
     reverse_proxy 127.0.0.1:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
@@ -210,7 +210,7 @@ Important: the admin domain **always shows the file manager**, regardless of `PU
 The file manager uses “pretty” paths. Instead of `/?path=...` it shows directories like:
 
 ```
-https://dina.example.com/Reports/2025/?sort=name&order=asc
+https://admin.example.com/Reports/2025/?sort=name&order=asc
 ```
 
 ### Admin disk usage
@@ -380,3 +380,209 @@ Unban manually with:
 ```bash
 sudo fail2ban-client set vsftpd unbanip <IP>
 ```
+
+---
+
+## Off-site backups (BorgBackup) + monitoring
+
+Automated, versioned, off-site backups of the data directory using
+[BorgBackup](https://www.borgbackup.org/), with a freshness check wired into a
+Telegram uptime monitor so you get alerted if backups stop running.
+
+### Why Borg
+
+- **Versioned snapshots** — restore the data as it was at any past point, not
+  just "latest". A plain `rsync` mirror cannot do this: a deleted or corrupted
+  file is gone from the mirror too.
+- **Deduplication + compression** — dozens of snapshots of mostly-unchanged data
+  cost barely more than one.
+- **Append-only protection** — the data host can only *add* archives; it cannot
+  delete history. So a compromised/ransomwared data host cannot destroy backups.
+- **Optional encryption** — see below.
+
+### Architecture
+
+```
+DATA host (this project)                         BACKUP host (big disk, off-site)
+  /data  ──borg create (every 6h)──►  ssh ──►  borg repo  (append-only for the data host)
+                                                  └─ prune + compact run locally here
+```
+
+- **Push from the data host** over SSH, on a systemd timer.
+- The data host authenticates with a **dedicated, restricted SSH key** that can
+  only run `borg serve --append-only` on the repo path — nothing else.
+- **Pruning runs on the backup host**, locally, because the append-only key
+  cannot delete. This keeps the deletion authority on the more-trusted side.
+
+Ready-to-edit templates live in [`deploy/borg/`](deploy/borg):
+`backup.sh`, `borg-backup.service`, `borg-backup.timer` (data host);
+`prune.sh`, `check-fresh.sh` (backup host).
+
+### Encryption: enable or disable
+
+Borg can encrypt the repository or not. Choose at **repo creation time** with the
+`--encryption` flag of `borg init`. This is the one decision to make up front.
+
+| Mode | `borg init --encryption=` | Restore needs | Use when |
+|---|---|---|---|
+| **Off** | `none` | nothing — just `borg extract` | Data is not secret and you want the simplest, fastest recovery with no keys/passphrases to manage. |
+| **On** | `repokey-blake2` | passphrase (key is stored *in* the repo) | Data is sensitive and the backup host is not fully trusted (e.g. third-party storage). |
+
+**Unencrypted (`none`)** — simplest. No passphrase anywhere. The only extra step
+is allowing non-interactive access (already handled by `backup.sh`, which exports
+`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes`).
+
+**Encrypted (`repokey-blake2`)** — every `borg` command that touches the repo
+needs the passphrase. Provide it via `BORG_PASSCOMMAND` (uncomment the line in
+`backup.sh`, `prune.sh`, `check-fresh.sh`), e.g. store it in `/etc/borg/passphrase`
+(`chmod 600`). **Keep the passphrase and an exported copy of the key
+(`borg key export`) somewhere safe and separate — without them the backup is
+unrecoverable.**
+
+> You can't flip encryption on an existing repo — re-init a fresh one and back up
+> again.
+
+### Setup
+
+#### 1. Install Borg (both hosts)
+
+```bash
+sudo apt install -y borgbackup        # Debian/Ubuntu
+```
+
+#### 2. Dedicated SSH key (data host → backup host)
+
+On the **data host**, create a key used *only* for backups:
+
+```bash
+sudo mkdir -p /etc/borg
+sudo ssh-keygen -t ed25519 -N "" -f /etc/borg/borg_key -C "borg@$(hostname -s)"
+sudo cat /etc/borg/borg_key.pub
+```
+
+On the **backup host**, add that public key to `~/.ssh/authorized_keys` **with a
+forced, restricted command** so it can do nothing but append to the repo:
+
+```
+command="borg serve --append-only --restrict-to-path /path/to/borg-repo",restrict ssh-ed25519 AAAA... borg@datahost
+```
+
+`restrict` disables PTY/agent/port forwarding; `--append-only` blocks deletion;
+`--restrict-to-path` confines it to the repo location (subdirectories included).
+
+#### 3. Repository layout + init (backup host)
+
+Keep the repo and its helper scripts together, but the scripts **outside** the
+repo directory (Borg manages the repo dir — don't drop files inside it):
+
+```
+/path/to/borg-repo/
+├── repo/            ← the Borg repository itself
+├── prune.sh
+├── check-fresh.sh
+└── *.log
+```
+
+Initialize the repository — pick the encryption mode (see table above):
+
+```bash
+borg init --encryption=none          /path/to/borg-repo/repo   # unencrypted
+# or
+borg init --encryption=repokey-blake2 /path/to/borg-repo/repo  # encrypted
+```
+
+> The `--restrict-to-path` above points at `/path/to/borg-repo`, which covers the
+> `repo/` subdirectory.
+
+#### 4. Backup script + timer (data host)
+
+1. Add the destination to the project's `docker/.env`:
+
+   ```dotenv
+   BORG_REPO=backup_user@backup_host:/path/to/borg-repo/repo
+   BORG_SSH_KEY=/etc/borg/borg_key
+   ```
+
+   `backup.sh` reads `DATA_DIR` from the same `docker/.env` (resolving the
+   compose-relative `../data` to an absolute path), so there's one source of truth.
+
+2. Install the script and units:
+
+   ```bash
+   sudo install -m 750 deploy/borg/backup.sh /usr/local/bin/borg-backup.sh
+   # set PROJECT_DIR inside the script to your checkout path
+   sudo cp deploy/borg/borg-backup.service deploy/borg/borg-backup.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now borg-backup.timer
+   ```
+
+3. Run once by hand to verify:
+
+   ```bash
+   sudo /usr/local/bin/borg-backup.sh
+   sudo systemctl list-timers borg-backup.timer
+   ```
+
+#### 5. Prune + compact (backup host)
+
+Retention is applied locally on the backup host (the data host can't delete).
+Edit `REPO` in `deploy/borg/prune.sh`, install it next to the repo, and schedule
+it daily at a time that doesn't overlap a backup:
+
+```cron
+30 3 * * * /path/to/borg-repo/prune.sh
+```
+
+Default policy (in `prune.sh`): keep everything from the **last 2 days** (all
+intraday runs), then **7 daily**, **4 weekly**, **6 monthly**. `borg compact`
+afterwards actually frees the pruned space.
+
+### Restore
+
+List archives and restore — on the backup host (fast, local) or from anywhere
+with repo access:
+
+```bash
+borg list  /path/to/borg-repo/repo                       # all snapshots
+borg list  /path/to/borg-repo/repo::ARCHIVE              # files in one snapshot
+
+# extract a whole snapshot (into ./<paths>) ...
+cd /tmp/restore && borg extract /path/to/borg-repo/repo::ARCHIVE
+# ... or a single file/subdir:
+borg extract /path/to/borg-repo/repo::ARCHIVE path/inside/data/file.txt
+
+# browse interactively:
+borg mount /path/to/borg-repo/repo /mnt/borg && ls /mnt/borg
+```
+
+(With an **encrypted** repo, every command above also needs the passphrase.)
+
+### Monitoring: alert if backups stop
+
+Use a self-hosted [uptime monitor with Telegram alerts](https://github.com/pohape/self-hosted-tg-alerts-uptime-monitor).
+Its `commands:` checks run a shell command and alert when the command exits
+non-zero **or** its output doesn't contain `search_string` — and send a RESTORE
+message once it recovers.
+
+`deploy/borg/check-fresh.sh` prints `FRESH ...` (exit 0) when the newest archive
+is younger than `MAX_AGE_HOURS` (default 8h — one missed 6-hourly run is
+tolerated, a sustained outage is not), otherwise `STALE ...` (exit 1).
+
+Install it on the **backup host** (where the repo is local) and add a check to the
+monitor's `config.yaml`:
+
+```yaml
+commands:
+  filestorage_backup_fresh:
+    command: "/path/to/borg-repo/check-fresh.sh"
+    search_string: "FRESH"
+    schedule: "0 1,7,13,19 * * *"   # ~1h after each 6-hourly backup window
+    timeout: 60
+    tg_chats_to_notify:
+      - 'YOUR_TELEGRAM_CHAT_ID'
+```
+
+If a backup run fails or the timer stops, no new archive appears, the script goes
+`STALE`, and the monitor sends a Telegram alert; when backups resume it sends a
+recovery notice. For an encrypted repo, set `BORG_PASSCOMMAND` in `check-fresh.sh`
+too.

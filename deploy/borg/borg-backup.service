@@ -1,0 +1,12 @@
+[Unit]
+Description=Off-site Borg backup of the filestorage data directory
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/borg-backup.sh
+# be gentle on CPU/disk so backups don't disturb the live server
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

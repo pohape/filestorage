@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the off-site Borg backup every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:00:00
+RandomizedDelaySec=5min
+# run a missed backup as soon as possible after downtime
+Persistent=true
+
+[Install]
+WantedBy=timers.target
