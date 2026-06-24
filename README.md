@@ -332,3 +332,51 @@ and update Caddy upstream to `127.0.0.1:8081`.
 - Keep `docker/.env` private (`chmod 600 docker/.env`), as it contains admin credentials.
 - Prefer SSH keys over passwords for SFTP.
 - For public deployments, consider adding rate limiting and access logs at the Caddy layer.
+
+---
+
+## Brute-force protection (fail2ban)
+
+fail2ban runs on the **host** (it is not part of the Docker stack) and bans IPs
+that repeatedly fail to authenticate over SSH and FTP.
+
+FTP needs a small bit of plumbing: vsftpd runs in a container, so its auth log is
+exposed to the host. The `ftp` container already writes
+`/var/log/vsftpd/vsftpd.log` (own format, with `FAIL LOGIN` lines) and the compose
+file bind-mounts that path to the host, so the host fail2ban can read it. SSH logs
+are read straight from the systemd journal.
+
+A ready-to-use config is provided in [`deploy/fail2ban/jail.local`](deploy/fail2ban/jail.local).
+The `vsftpd` jail bans only the FTP ports (`20,21` + the passive range
+`21100-21102`), **not** SSH — so a banned FTP client keeps its SSH session, and you
+cannot lock yourself out of SSH while testing FTP. Legit logins are unaffected:
+only failed auth is counted, so a correct password never accumulates bans.
+
+### Install
+
+```bash
+# 1) make sure the ftp container is (re)built so it writes the host-mounted log
+mkdir -p /var/log/vsftpd
+cd docker && docker compose --profile ftp up -d --build ftp
+
+# 2) install fail2ban on the host and drop in the config
+sudo apt install -y fail2ban
+sudo cp deploy/fail2ban/jail.local /etc/fail2ban/jail.local
+sudo systemctl enable --now fail2ban
+sudo systemctl restart fail2ban
+```
+
+### Verify
+
+```bash
+sudo fail2ban-client status            # should list: sshd, vsftpd
+sudo fail2ban-client status vsftpd     # failed/banned counters
+```
+
+To test, attempt a few wrong-password FTP logins from another host: after
+`maxretry` (5) within `findtime` (10m) the IP is banned for `bantime` (1h).
+Unban manually with:
+
+```bash
+sudo fail2ban-client set vsftpd unbanip <IP>
+```

@@ -1,0 +1,19 @@
+[DEFAULT]
+# Ban repeat offenders; pubkey logins are unaffected (only failed passwords count)
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+backend  = systemd
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+port    = 22
+
+[vsftpd]
+enabled  = true
+# ban only FTP control/data + passive range (NOT ssh) so a banned tester keeps ssh
+port     = 20,21,21100,21101,21102
+logpath  = /var/log/vsftpd/vsftpd.log
+backend  = auto
+maxretry = 5
