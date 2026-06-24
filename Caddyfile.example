@@ -2,7 +2,7 @@
     email example@example.com
 }
 
-# /home/user/data/vladivostok
+# vladivostok.<BASE_DOMAIN> -> <DATA_DIR>/vladivostok
 vladivostok.example.com {
     reverse_proxy 127.0.0.1:8080 {
         header_up Host {host}
@@ -11,7 +11,7 @@ vladivostok.example.com {
     }
 }
 
-# /home/user/data/vse
+# vse.<BASE_DOMAIN> -> <DATA_DIR>/vse
 vse.example.com {
     reverse_proxy 127.0.0.1:8080 {
         header_up Host {host}
@@ -20,7 +20,7 @@ vse.example.com {
     }
 }
 
-# /home/user/data/ - with basic HTTP auth
+# dina.<BASE_DOMAIN> -> <DATA_DIR> root (admin, Basic Auth enforced by Apache)
 dina.example.com {
     reverse_proxy 127.0.0.1:8080 {
         header_up Host {host}

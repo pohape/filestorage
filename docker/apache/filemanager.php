@@ -141,7 +141,7 @@ function storage_stats(string $path): array
     // Prefer actual directory usage (du), so data outside /data isn't counted.
     $duBin = trim((string) @shell_exec('command -v du'));
     if ($duBin !== '') {
-        $cmd = escapeshellcmd($duBin) . ' -sb ' . escapeshellarg($path) . ' 2>/dev/null';
+        $cmd = $duBin . ' -sb ' . escapeshellarg($path) . ' 2>/dev/null';
         $out = trim((string) @shell_exec($cmd));
         if ($out !== '') {
             $parts = preg_split('/\s+/', $out);
