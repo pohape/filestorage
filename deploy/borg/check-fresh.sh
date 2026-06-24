@@ -5,7 +5,7 @@
 set -uo pipefail
 
 # ---- configure ----
-REPO="/path/to/borg-repo"          # local path to the repository on this host
+REPO="/path/to/borg-repo/repo"     # local path to the repository on this host
 MAX_AGE_HOURS=8                    # backups run every 6h; older than this ⇒ stale
 # For an ENCRYPTED repo also export the passphrase, e.g.:
 # export BORG_PASSCOMMAND="cat /path/to/passphrase"

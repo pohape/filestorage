@@ -17,13 +17,16 @@ The container mounts your data **read-only**. Uploads/edits are done via SSH/SFT
 ## Repository layout
 
 ```
-Caddyfile.example
+Caddyfile.example          # sample host Caddy config (HTTPS + reverse proxy)
+up.sh  down.sh  restart.sh  build.sh   # docker compose wrappers (load .env, add ftp profile)
 docker/
-  docker-compose.yaml
+  docker-compose.yaml      # apache (always) + ftp (profile: ftp)
   .env.example
-  apache/
-    Dockerfile
-    entrypoint.sh
+  apache/                  # Dockerfile, entrypoint.sh, filemanager.php
+  ftp/                     # Dockerfile, entrypoint.sh (vsftpd)
+deploy/
+  fail2ban/jail.local      # SSH + FTP brute-force protection
+  borg/                    # off-site backup scripts + systemd units
 ```
 
 ---
@@ -68,13 +71,18 @@ cd filestorage
 
 ### 2) Create your storage directory on the host
 
-By default the compose file expects `../data` relative to `docker/docker-compose.yaml`,
-so create `~/data` next to your repo (or change `DATA_DIR` in `.env`).
+The compose file reads `DATA_DIR` from `.env`. The default `../data` is resolved
+relative to the `docker/` directory, i.e. a `data/` folder at the **repository
+root** (already in `.gitignore`). Create it with one subfolder per subdomain:
 
 ```bash
-mkdir -p ~/data/vse ~/data/vladivostok
-echo "hello" > ~/data/vse/test.txt
+# from the repository root (~/filestorage)
+mkdir -p data/vse data/vladivostok
+echo "hello" > data/vse/test.txt
 ```
+
+To store data elsewhere, set `DATA_DIR` to an absolute path (e.g.
+`DATA_DIR=/srv/storage`) in `.env`.
 
 ### 3) Configure `.env`
 
@@ -233,13 +241,14 @@ folder to the public subdomain (e.g. `https://vse.<BASE_DOMAIN>/...`).
 
 ### Permission model (important detail)
 
-Apache worker processes drop privileges. This project automatically sets the Apache
-worker UID/GID to match the owner of the mounted `/data` using:
+Apache worker processes drop privileges. At container start,
+`docker/apache/entrypoint.sh` reads the owner of the mounted data directory and
+sets the Apache worker UID/GID to match it:
 
-- `stat -c %u /var/www`
-- `stat -c %g /var/www`
+- `stat -c %u /data` → `APACHE_RUN_USER`
+- `stat -c %g /data` → `APACHE_RUN_GROUP`
 
-This is generated into `conf/extra/run.conf` by `docker/apache/entrypoint.sh`.
+These are written into `/etc/apache2/envvars`.
 
 That avoids “works in shell but 403 in browser” permission issues, without loosening host permissions.
 
@@ -472,27 +481,34 @@ command="borg serve --append-only --restrict-to-path /path/to/borg-repo",restric
 
 #### 3. Repository layout + init (backup host)
 
-Keep the repo and its helper scripts together, but the scripts **outside** the
-repo directory (Borg manages the repo dir — don't drop files inside it):
+Lay out a parent directory holding the repository and its two helper scripts
+(`prune.sh`, `check-fresh.sh`, copied from this repo's `deploy/borg/`). Keep the
+scripts **beside** the repo, never inside it — Borg manages the repo directory:
 
 ```
 /path/to/borg-repo/
 ├── repo/            ← the Borg repository itself
-├── prune.sh
-├── check-fresh.sh
+├── prune.sh         ← from deploy/borg/ (see step 5)
+├── check-fresh.sh   ← from deploy/borg/ (see Monitoring)
 └── *.log
 ```
 
-Initialize the repository — pick the encryption mode (see table above):
+The two helper scripts live in `deploy/borg/` in this repo. The `install`
+commands in steps 5 and Monitoring assume the scripts are available on the backup
+host, so either clone this repo there too, or `scp` the two files over.
+
+Create the parent directory and initialize the repository inside it — pick the
+encryption mode (see the table above):
 
 ```bash
-borg init --encryption=none          /path/to/borg-repo/repo   # unencrypted
+mkdir -p /path/to/borg-repo
+borg init --encryption=none           /path/to/borg-repo/repo   # unencrypted
 # or
-borg init --encryption=repokey-blake2 /path/to/borg-repo/repo  # encrypted
+borg init --encryption=repokey-blake2 /path/to/borg-repo/repo   # encrypted
 ```
 
-> The `--restrict-to-path` above points at `/path/to/borg-repo`, which covers the
-> `repo/` subdirectory.
+> The `--restrict-to-path /path/to/borg-repo` from step 2 covers the `repo/`
+> subdirectory, so the append-only key can write here.
 
 #### 4. Backup script + timer (data host)
 
@@ -510,13 +526,15 @@ borg init --encryption=repokey-blake2 /path/to/borg-repo/repo  # encrypted
 
    ```bash
    sudo install -m 750 deploy/borg/backup.sh /usr/local/bin/borg-backup.sh
-   # set PROJECT_DIR inside the script to your checkout path
+   # then set PROJECT_DIR at the top of /usr/local/bin/borg-backup.sh to your
+   # checkout path (or add Environment=PROJECT_DIR=... to the service)
    sudo cp deploy/borg/borg-backup.service deploy/borg/borg-backup.timer /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable --now borg-backup.timer
    ```
 
-3. Run once by hand to verify:
+3. Run once by hand to verify (output is shown and also appended to
+   `/var/log/borg-backup.log`):
 
    ```bash
    sudo /usr/local/bin/borg-backup.sh
@@ -526,8 +544,14 @@ borg init --encryption=repokey-blake2 /path/to/borg-repo/repo  # encrypted
 #### 5. Prune + compact (backup host)
 
 Retention is applied locally on the backup host (the data host can't delete).
-Edit `REPO` in `deploy/borg/prune.sh`, install it next to the repo, and schedule
-it daily at a time that doesn't overlap a backup:
+Place `prune.sh` next to the repo, point its `REPO` variable at `repo/`, and
+schedule it daily at a time that doesn't overlap a backup:
+
+```bash
+install -m 750 deploy/borg/prune.sh /path/to/borg-repo/prune.sh
+# REPO at the top already defaults to /path/to/borg-repo/repo — adjust if needed
+crontab -e   # add the line below
+```
 
 ```cron
 30 3 * * * /path/to/borg-repo/prune.sh
@@ -568,8 +592,12 @@ message once it recovers.
 is younger than `MAX_AGE_HOURS` (default 8h — one missed 6-hourly run is
 tolerated, a sustained outage is not), otherwise `STALE ...` (exit 1).
 
-Install it on the **backup host** (where the repo is local) and add a check to the
-monitor's `config.yaml`:
+Place it next to the repo on the **backup host** (its `REPO` variable defaults to
+`/path/to/borg-repo/repo`) and add a check to the monitor's `config.yaml`:
+
+```bash
+install -m 750 deploy/borg/check-fresh.sh /path/to/borg-repo/check-fresh.sh
+```
 
 ```yaml
 commands:

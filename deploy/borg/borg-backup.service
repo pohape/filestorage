@@ -6,6 +6,8 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/borg-backup.sh
+# Instead of editing PROJECT_DIR inside the script, you may point it here:
+# Environment=PROJECT_DIR=/path/to/filestorage
 # be gentle on CPU/disk so backups don't disturb the live server
 Nice=10
 IOSchedulingClass=best-effort
